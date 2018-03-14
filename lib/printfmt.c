@@ -28,8 +28,6 @@ static const char * const error_string[MAXERROR] =
 	[E_FAULT]	= "segmentation fault",
 };
 
-static int ncount = 0;
-
 static void do_printnum(void (*putch)(int, void*), void *putdat,
 	 unsigned long long num, unsigned base, int width, int padc) {
 	// first recursively print all preceding (more significant) digits
@@ -38,7 +36,6 @@ static void do_printnum(void (*putch)(int, void*), void *putdat,
 	}
 	// then print this (the least significant) digit
 	putch("0123456789abcdef"[num % base], putdat);
-	++ncount;
 }
 
 /*
@@ -65,13 +62,11 @@ printnum(void (*putch)(int, void*), void *putdat,
 		do_printnum(putch, putdat, num, base, width, padc);
 		while (--w > 0) {
 			putch(' ', putdat);    // print any needed pad characters before first digit
-			++ncount;
 		}
 	}
 	else {
 		while (--w > 0) {
 			putch(padc, putdat);
-			++ncount;
 		}
 		do_printnum(putch, putdat, num, base, width, padc);
 	}
@@ -117,14 +112,11 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 	int base, lflag, width, precision, altflag, symbolflag;
 	char padc;
 
-	ncount = 0;
-
 	while (1) {
 		while ((ch = *(unsigned char *) fmt++) != '%') {
 			if (ch == '\0')
 				return;
 			putch(ch, putdat);
-			++ncount;
 		}
 
 		// Process a %-escape sequence
@@ -194,7 +186,6 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 		// character
 		case 'c':
 			putch(va_arg(ap, int), putdat);
-			++ncount;
 			break;
 
 		// error message
@@ -215,20 +206,16 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 			if (width > 0 && padc != '-')
 				for (width -= strnlen(p, precision); width > 0; width--) {
 					putch(padc, putdat);
-					++ncount;
 				}
 			for (; (ch = *p++) != '\0' && (precision < 0 || --precision >= 0); width--)
 				if (altflag && (ch < ' ' || ch > '~')) {
 					putch('?', putdat);
-					++ncount;
 				}
 				else {
 					putch(ch, putdat);
-					++ncount;
 				}
 			for (; width > 0; width--) {
 				putch(' ', putdat);
-				++ncount;
 			}
 			break;
 
@@ -237,13 +224,11 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 			num = getint(&ap, lflag);
 			if ((long long) num < 0) {
 				putch('-', putdat);
-				++ncount;
 				num = -(long long) num;
 			}
 			else {
 				if(symbolflag) {
 					putch('+', putdat);
-					++ncount;
 				}
 			}
 			base = 10;
@@ -260,7 +245,6 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 			// Replace this with your code.
 			// display a number in octal form and the form should begin with '0'
 			putch('0', putdat);
-			++ncount;
 			num = getuint(&ap, lflag);
 			base = 8;
 			goto number;
@@ -268,9 +252,7 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 		// pointer
 		case 'p':
 			putch('0', putdat);
-			++ncount;
 			putch('x', putdat);
-			++ncount;
 			num = (unsigned long long)
 				(uintptr_t) va_arg(ap, void *);
 			base = 16;
@@ -306,6 +288,7 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 
             int size = 0;
             int i = 0;
+            int ncount = *(int *)putdat;
 
             // Your code here
             if ((p = va_arg(ap, char *)) == NULL) {
@@ -331,13 +314,11 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 		// escaped '%' character
 		case '%':
 			putch(ch, putdat);
-			++ncount;
 			break;
 			
 		// unrecognized escape sequence - just print it literally
 		default:
 			putch('%', putdat);
-			++ncount;
 			for (fmt--; fmt[-1] != '%'; fmt--)
 				/* do nothing */;
 			break;
