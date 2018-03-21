@@ -267,16 +267,18 @@ page_init(void)
 	// free pages!
 	size_t i;
 	unsigned memend = (unsigned)PADDR(boot_alloc(0));
+	struct Page **tail = &page_free_list;
 	assert(IOPHYSMEM % PGSIZE == 0);
 	assert(EXTPHYSMEM % PGSIZE == 0);
 	assert(memend % PGSIZE == 0);
 	for (i = 0; i < npages; i++) {
 		if(!((i==0) || (i>=IOPHYSMEM/PGSIZE && i<memend/PGSIZE))) {
 			pages[i].pp_ref = 0;
-			pages[i].pp_link = page_free_list;
-			page_free_list = &pages[i];
+			*tail = &pages[i];
+			tail = &pages[i].pp_link;
 		}
 	}
+	*tail = NULL;    // ensure low memory first
 	chunk_list = NULL;
 }
 
