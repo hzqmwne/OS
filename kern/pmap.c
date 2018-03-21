@@ -478,19 +478,7 @@ page_insert(pde_t *pgdir, struct Page *pp, void *va, int perm)
 		pgdir[PDX(va)] |= PTE_U;
 	}
 	tlb_invalidate(pgdir, va);
-/*
-cprintf("va:%p\n", va);
-pde_t *pgdir2 = &pgdir[PDX(va)];
-if (!(*pgdir2 & PTE_P))
-	cprintf("error1\n");
-pte_t *p2 = (pte_t*) KADDR(PTE_ADDR(*pgdir2));
-cprintf("pte:%p p2:%p\n", pte, p2);
-if (!(p2[PTX(va)] & PTE_P))
-	cprintf("error2\n");
-cprintf("noerror %x\n", PTE_ADDR(p2[PTX(va)]));
-cprintf("%p %p\n", check_va2pa(pgdir, (uintptr_t)va), page2pa(pp));
-cprintf("===\n");
-*/
+
 	return 0;
 }
 
