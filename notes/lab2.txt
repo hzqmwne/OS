@@ -1,0 +1,3 @@
+qemu monitor的ctrl+a c进入方式，需要在无界面模式下才有效？（make qemu-nox或make qemu-nox-gdb）
+
+分页模式，如果使用4M的大页，需要在修改cr3之前对cr4的CR4_PSE置位！
