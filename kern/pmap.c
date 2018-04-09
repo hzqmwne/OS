@@ -163,7 +163,8 @@ mem_init(void)
 	//////////////////////////////////////////////////////////////////////
 	// Make 'envs' point to an array of size 'NENV' of 'struct Env'.
 	// LAB 3: Your code here.
-	
+	envs = (struct Env *)boot_alloc(NENV * sizeof(struct Env));
+
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
 	// up the list of free physical pages. Once we've done so, all further
@@ -195,6 +196,7 @@ mem_init(void)
 	//    - the new image at UENVS  -- kernel R, user R
 	//    - envs itself -- kernel RW, user NONE
 	// LAB 3: Your code here.
+	boot_map_region(kern_pgdir, UENVS, ROUNDUP(NENV*sizeof(struct Env), PGSIZE), PADDR(envs), PTE_U|PTE_P);
 
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
@@ -398,7 +400,7 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
 			return NULL;
 		}
 		++p->pp_ref;
-		pgdir[pde_index] = page2pa(p) | PTE_P | PTE_W;    //???
+		pgdir[pde_index] = page2pa(p) | PTE_P | PTE_U | PTE_W;
 		return (pte_t *)page2kva(p)+PTX(va);
 	}
 	return NULL;
@@ -502,9 +504,6 @@ page_insert(pde_t *pgdir, struct Page *pp, void *va, int perm)
 	}
 
 	*pte = page2pa(pp) | perm | PTE_P;
-	if(perm & PTE_U) {
-		pgdir[PDX(va)] |= PTE_U;
-	}
 	tlb_invalidate(pgdir, va);
 
 	return 0;
@@ -603,6 +602,22 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
+	if(len == 0) {
+		return 0;
+	}
+	uintptr_t start = ROUNDDOWN((uint32_t)va, PGSIZE);
+	uintptr_t end = ROUNDUP((uint32_t)va+len, PGSIZE);
+	uintptr_t last = (end < start)? 0-PGSIZE : end-PGSIZE;    // int may overflow
+	int count = (end < start)? ((last-start)/PGSIZE + 1): (end-start)/PGSIZE;
+	int i;
+	uintptr_t now;
+	for(i = 0, now = start; i < count; ++i, now += PGSIZE) {
+		pte_t *pte = pgdir_walk(env->env_pgdir, (void *)now, 0);
+		if(!(now < ULIM) || pte == NULL || !(*pte & PTE_P) || ((perm & PTE_U) && !(*pte & PTE_U))) {
+			user_mem_check_addr = MAX(now, (uint32_t)va);
+			return -E_FAULT;
+		}
+	}
 
 	return 0;
 }

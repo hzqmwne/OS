@@ -12,6 +12,9 @@
 #include <kern/kdebug.h>
 #include <kern/trap.h>
 
+#include <kern/pmap.h>
+#include <kern/env.h>
+
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
 
@@ -27,6 +30,11 @@ static struct Command commands[] = {
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
 	{ "backtrace", "Display backtrace", mon_backtrace },
 	{ "time", "Display the running time (in clocks cycles) of the command", mon_time },
+	{ "exit", "quit", mon_quit },
+	{ "quit", "quit", mon_quit },
+	{ "c", "continue", mon_continue },
+	{ "si", "step instruction", mon_stepi },
+	{ "x", "examine", mon_examine },
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
@@ -84,11 +92,7 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 
 		cprintf("  eip %08x  ebp %08x  args %08x %08x %08x %08x %08x\n", eip, ebp, ebp[2], ebp[3], ebp[4], ebp[5], ebp[6]);
 		debuginfo_eip(eip, &info);
-		cprintf("         %s:%d ", info.eip_file, info.eip_line);
-		for(i = 0; i < info.eip_fn_namelen; ++i) {
-			cprintf("%c", info.eip_fn_name[i]);
-		}
-		cprintf("+%d\n", eip - info.eip_fn_addr);
+		cprintf("         %s:%d %.*s+%d\n", info.eip_file, info.eip_line, info.eip_fn_namelen, info.eip_fn_name, eip - info.eip_fn_addr);
 
 		ebp = (unsigned *)ebp[0];
 	}
@@ -177,6 +181,10 @@ read_eip()
 
 
 
+int mon_quit(int argc, char **argv, struct Trapframe *tf) {
+	return -1;
+}
+
 int
 mon_time(int argc, char **argv, struct Trapframe *tf) {
 	long long start, end;
@@ -187,4 +195,33 @@ mon_time(int argc, char **argv, struct Trapframe *tf) {
 	return 0;
 }
 
+int mon_continue(int argc, char **argv, struct Trapframe *tf) {
+	if(tf != NULL) {
+		tf->tf_eflags &= ~FL_TF;
+		return -1;
+	}
+	return 0;
+}
+
+int mon_stepi(int argc, char **argv, struct Trapframe *tf) {
+	if(tf != NULL) {
+		user_mem_assert(curenv, (void *)tf->tf_eip, 1, PTE_U|PTE_P);
+		cprintf("tf_eip=%08x\n", tf->tf_eip);
+		struct Eipdebuginfo info;
+		debuginfo_eip(tf->tf_eip, &info);
+		cprintf("%s:%d: %.*s+%d\n", info.eip_file, info.eip_line, info.eip_fn_namelen, info.eip_fn_name, tf->tf_eip - info.eip_fn_addr);    // see syscall.c, line 27
+		tf->tf_eflags |= FL_TF;
+		return -1;
+	}
+	return 0;
+}
+
+int mon_examine(int argc, char **argv, struct Trapframe *tf) {
+	long value = strtol(argv[1], NULL, 0);
+	if(tf != NULL) {
+		user_mem_assert(curenv, (void *)value, 4, PTE_U|PTE_P);
+	}
+	cprintf("%ld\n", *(int *)value);
+	return 0;
+}
 
