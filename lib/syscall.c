@@ -16,6 +16,16 @@ syscall(int num, int check, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 		 "pushl %%edi\n\t"
 				 
                  //Lab 3: Your code here
+		 "movl %1, %%eax\n\t"
+		 "movl %2, %%edx\n\t"
+		 "movl %3, %%ecx\n\t"
+		 "movl %4, %%ebx\n\t"
+		 "movl %5, %%edi\n\t"
+		 "leal 0f, %%esi\n\t"
+		 "movl %%esp, %%ebp\n\t"
+		 "sysenter\n"
+		 "0:\n\t"
+		 "movl %%eax, %0\n\t"
 
                  "popl %%edi\n\t"
                  "popl %%esi\n\t"

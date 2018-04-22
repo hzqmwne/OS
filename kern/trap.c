@@ -30,6 +30,27 @@ struct Pseudodesc idt_pd = {
 	sizeof(idt) - 1, (uint32_t) idt
 };
 
+extern void TRAP_0();
+extern void TRAP_1();
+extern void TRAP_2();
+extern void TRAP_3();
+extern void TRAP_4();
+extern void TRAP_5();
+extern void TRAP_6();
+extern void TRAP_7();
+extern void TRAP_8();
+extern void TRAP_9();
+extern void TRAP_10();
+extern void TRAP_11();
+extern void TRAP_12();
+extern void TRAP_13();
+extern void TRAP_14();
+extern void TRAP_15();    // 
+extern void TRAP_16();
+extern void TRAP_17();
+extern void TRAP_18();
+extern void TRAP_19();
+extern void sysenter_handler();
 
 static const char *trapname(int trapno)
 {
@@ -72,6 +93,30 @@ trap_init(void)
 	extern struct Segdesc gdt[];
 
 	// LAB 3: Your code here.
+	uint32_t cs = GD_KT;    // also PROT_MODE_CSEG in boot.S; GD_KT is in memlayout.h
+	wrmsr(0x174, cs, 0);    /* SYSENTER_CS_MSR */
+	wrmsr(0x175, KSTACKTOP, 0);    /* SYSENTER_ESP_MSR */
+	wrmsr(0x176, (uint32_t)sysenter_handler, 0);    /* SYSENTER_EIP_MSR */
+	SETGATE(idt[0], 1, cs, TRAP_0, 0);
+	SETGATE(idt[1], 0, cs, TRAP_1, 0);
+	SETGATE(idt[2], 0, cs, TRAP_2, 0);
+	SETGATE(idt[3], 1, cs, TRAP_3, 3);
+	SETGATE(idt[4], 0, cs, TRAP_4, 0);
+	SETGATE(idt[5], 0, cs, TRAP_5, 0);
+	SETGATE(idt[6], 0, cs, TRAP_6, 0);
+	SETGATE(idt[7], 0, cs, TRAP_7, 0);
+	SETGATE(idt[8], 0, cs, TRAP_8, 0);
+	SETGATE(idt[9], 0, cs, TRAP_9, 0);
+	SETGATE(idt[10], 0, cs, TRAP_10, 0);
+	SETGATE(idt[11], 0, cs, TRAP_11, 0);
+	SETGATE(idt[12], 0, cs, TRAP_12, 0);
+	SETGATE(idt[13], 1, cs, TRAP_13, 0);
+	SETGATE(idt[14], 1, cs, TRAP_14, 0);
+	SETGATE(idt[15], 0, cs, TRAP_15, 0);
+	SETGATE(idt[16], 0, cs, TRAP_16, 0);
+	SETGATE(idt[17], 0, cs, TRAP_17, 0);
+	SETGATE(idt[18], 0, cs, TRAP_18, 0);
+	SETGATE(idt[19], 0, cs, TRAP_19, 0);
 
 	// Per-CPU setup 
 	trap_init_percpu();
@@ -173,6 +218,21 @@ trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
+	switch(tf->tf_trapno) {
+		case T_DEBUG: case T_BRKPT: {    // 1 3
+			monitor(tf);
+			return;
+			break;
+		}
+		case T_PGFLT: {    // 14
+			page_fault_handler(tf);
+			return;
+			break;
+		}
+		default: {
+			break;
+		}
+	}
 
 	// Handle spurious interrupts
 	// The hardware sometimes raises these because of noise on the
@@ -264,6 +324,9 @@ page_fault_handler(struct Trapframe *tf)
 	// Handle kernel-mode page faults.
 
 	// LAB 3: Your code here.
+	if((tf->tf_cs & 3) == 0) {    // see 3.4.2 Segment Selectors, Intel manual
+		panic("page fault happens in kernel mode");
+	}
 
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
