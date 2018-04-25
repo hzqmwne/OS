@@ -258,6 +258,7 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 
 	// Enable interrupts while in user mode.
 	// LAB 4: Your code here.
+	e->env_tf.tf_eflags |= FL_IF;
 
 	// Clear the page fault handler until user installs one.
 	e->env_pgfault_upcall = 0;
@@ -372,7 +373,11 @@ load_icode(struct Env *e, uint8_t *binary, size_t size)
 	//  What?  (See env_run() and env_pop_tf() below.)
 
 	// LAB 3: Your code here.
-	pde_t *pdes[3] = {kern_pgdir, e->env_pgdir, NULL};
+
+	uint32_t old_cr3 = rcr3();
+	lcr3(PADDR(e->env_pgdir));
+
+	pde_t *pdes[2] = { e->env_pgdir, NULL };
 	struct Elf *elfhdr = (struct Elf *)binary;
 	struct Proghdr *ph, *eph;
 	if (elfhdr->e_magic != ELF_MAGIC) {
@@ -402,6 +407,8 @@ load_icode(struct Env *e, uint8_t *binary, size_t size)
 
 	// LAB 3: Your code here.
 	region_alloc_pdes(pdes, (void *)(USTACKTOP - PGSIZE), PGSIZE, PTE_W|PTE_U|PTE_P);
+
+	lcr3(old_cr3);
 }
 
 //
@@ -552,11 +559,13 @@ env_run(struct Env *e)
 		curenv->env_status = ENV_RUNNABLE;
 	}    //??
 	curenv = e;
+	e->env_cpunum = cpunum();
 	e->env_status = ENV_RUNNING;
 	++e->env_runs;
 	lcr3(PADDR(e->env_pgdir));
+	unlock_kernel();
 	env_pop_tf(&e->env_tf);
 
-	panic("env_run not yet implemented");
+	//panic("env_run not yet implemented");
 }
 

@@ -221,7 +221,7 @@ mem_init(void)
 	// we just set up the mapping anyway.
 	// Permissions: kernel RW, user NONE
 	// Your code goes here:
-	boot_map_region_large(kern_pgdir, KERNBASE, (0xFFFFFFFF-KERNBASE)+1, 0, PTE_W|PTE_P);
+	boot_map_region_large(kern_pgdir, KERNBASE, IOMEMBASE-KERNBASE, 0, PTE_W|PTE_P);
 
 	// Initialize the SMP-related parts of the memory map
 	mem_init_mp();
@@ -282,7 +282,11 @@ mem_init_mp(void)
 	//     Permissions: kernel RW, user NONE
 	//
 	// LAB 4: Your code here:
-
+	int i;
+	for(i = 0; i < NCPU; ++i) {
+		uintptr_t kstacktop_i = KSTACKTOP - i*(KSTKSIZE+KSTKGAP);
+		boot_map_region(kern_pgdir, kstacktop_i-KSTKSIZE, KSTKSIZE, PADDR(&percpu_kstacks[i]), PTE_W|PTE_P);
+	}
 }
 
 // --------------------------------------------------------------
@@ -328,7 +332,7 @@ page_init(void)
 	assert(EXTPHYSMEM % PGSIZE == 0);
 	assert(memend % PGSIZE == 0);
 	for (i = 0; i < npages; i++) {
-		if(!((i==0) || (i>=IOPHYSMEM/PGSIZE && i<memend/PGSIZE))) {
+		if(!((i==0) || (i>=IOPHYSMEM/PGSIZE && i<(memend+PGSIZE-1)/PGSIZE) || (i==MPENTRY_PADDR/PGSIZE) || (i>=IOMEMBASE/PGSIZE))) {
 			pages[i].pp_ref = 0;
 			*tail = &pages[i];
 			tail = &pages[i].pp_link;
@@ -432,6 +436,9 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
 	int pde_index = PDX(va);
 	struct Page *p;
 	if(pgdir[pde_index] & PTE_P) {
+		if(pgdir[pde_index] & PTE_PS) {
+			return NULL;
+		}
 		return (pte_t *)KADDR(PTE_ADDR(pgdir[pde_index]))+PTX(va);
 	}
 	else if(create) {
@@ -655,7 +662,7 @@ user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 	uintptr_t now;
 	for(i = 0, now = start; i < count; ++i, now += PGSIZE) {
 		pte_t *pte = pgdir_walk(env->env_pgdir, (void *)now, 0);
-		if(!(now < ULIM) || pte == NULL || !(*pte & PTE_P) || ((perm & PTE_U) && !(*pte & PTE_U))) {
+		if(!(now < ULIM) || pte == NULL || !(*pte & PTE_P) || ((perm & PTE_U) && !(*pte & PTE_U)) || ((perm & PTE_U) && (perm & PTE_W) && !(*pte & PTE_W))) {
 			user_mem_check_addr = MAX(now, (uint32_t)va);
 			return -E_FAULT;
 		}

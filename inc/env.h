@@ -54,9 +54,6 @@ struct Env {
 	uint32_t env_runs;		// Number of times environment has run
 	int env_cpunum;			// The CPU that the env is running on
 
-	// LAB3: might need code here for implementation of sbrk
-	uint32_t brk;
-
 	// Address space
 	pde_t *env_pgdir;		// Kernel virtual address of page dir
 
@@ -71,6 +68,7 @@ struct Env {
 	int env_ipc_perm;		// Perm of page mapping received
 
 	// LAB3: might need code here for implementation of sbrk
+	uint32_t brk;
 
 };
 

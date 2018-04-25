@@ -50,6 +50,52 @@ syscall(int num, int check, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 	return ret;
 }
 
+static inline int32_t
+syscall_trap(int num, int check, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+	int32_t ret;
+	asm volatile("pushl %%ecx\n\t"
+		 "pushl %%edx\n\t"
+	         "pushl %%ebx\n\t"
+		 "pushl %%esp\n\t"
+		 "pushl %%ebp\n\t"
+		 "pushl %%esi\n\t"
+		 "pushl %%edi\n\t"
+				 
+                 //Lab 3: Your code here
+		 "movl %1, %%eax\n\t"
+		 "movl %2, %%ebx\n\t"
+		 "movl %3, %%ecx\n\t"
+		 "movl %4, %%edx\n\t"
+		 "movl %5, %%esi\n\t"
+		 "movl %6, %%edi\n\t"
+		 "int $0x30\n\t"
+		 "movl %%eax, %0\n\t"
+
+                 "popl %%edi\n\t"
+                 "popl %%esi\n\t"
+                 "popl %%ebp\n\t"
+                 "popl %%esp\n\t"
+                 "popl %%ebx\n\t"
+                 "popl %%edx\n\t"
+                 "popl %%ecx\n\t"
+                 
+                 : "=a" (ret)
+                 : "a" (num),
+                   "b" (a1),
+                   "c" (a2),
+                   "d" (a3),
+                   "S" (a4),
+		   "D" (a5)
+                 : "cc", "memory");
+
+
+	if(check && ret > 0) {
+		panic("syscall %d returned %d (> 0)", num, ret);
+	}
+	return ret;
+}
+
 void
 sys_cputs(const char *s, size_t len)
 {
@@ -65,7 +111,7 @@ sys_cgetc(void)
 int
 sys_env_destroy(envid_t envid)
 {
-	return syscall(SYS_env_destroy, 1, envid, 0, 0, 0, 0);
+	return syscall_trap(SYS_env_destroy, 1, envid, 0, 0, 0, 0);
 }
 
 envid_t
@@ -83,7 +129,7 @@ sys_map_kernel_page(void* kpage, void* va)
 void
 sys_yield(void)
 {
-	syscall(SYS_yield, 0, 0, 0, 0, 0, 0);
+	syscall_trap(SYS_yield, 0, 0, 0, 0, 0, 0);
 }
 
 int
@@ -95,7 +141,9 @@ sys_page_alloc(envid_t envid, void *va, int perm)
 int
 sys_page_map(envid_t srcenv, void *srcva, envid_t dstenv, void *dstva, int perm)
 {
-	return syscall(SYS_page_map, 1, srcenv, (uint32_t) srcva, dstenv, (uint32_t) dstva, perm);
+	uint32_t args[5] = { srcenv, (uint32_t)srcva, dstenv, (uint32_t)dstva, perm };
+	return syscall(SYS_page_map, 1, (uint32_t)args, 0, 0, 0, 0);
+	//return syscall(SYS_page_map, 1, srcenv, (uint32_t) srcva, dstenv, (uint32_t) dstva, perm);
 }
 
 int
@@ -127,7 +175,7 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, int perm)
 int
 sys_ipc_recv(void *dstva)
 {
-	return syscall(SYS_ipc_recv, 1, (uint32_t)dstva, 0, 0, 0, 0);
+	return syscall_trap(SYS_ipc_recv, 1, (uint32_t)dstva, 0, 0, 0, 0);
 }
 
 int
