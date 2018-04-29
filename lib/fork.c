@@ -7,6 +7,8 @@
 // It is one of the bits explicitly allocated to user processes (PTE_AVAIL).
 #define PTE_COW		0x800
 
+#define USER_STACK_SIZE 2048*PGSIZE
+
 //
 // Custom page fault handler - if faulting page is copy-on-write,
 // map in our own private writable copy.
@@ -25,8 +27,14 @@ pgfault(struct UTrapframe *utf)
 	//   (see <inc/memlayout.h>).
 
 	// LAB 4: Your code here.
-	if(0) {
-		// user stack
+	if((uint32_t)addr >= USTACKTOP-USER_STACK_SIZE && (uint32_t)addr < USTACKTOP && !(vpt[PGNUM(addr)] & PTE_P)) {
+		// user stack is not present
+		envid_t thisid = sys_getenvid();
+		r = sys_page_alloc(thisid, (void *)PTE_ADDR(addr), PTE_W|PTE_U|PTE_P);
+		if(r < 0) {
+			cprintf("%e\n", r);
+			panic("pgfault user stack sys_page_alloc error");
+		}
 		return;
 	}
 	if(!((err & FEC_WR) && (vpt[PGNUM(addr)] & PTE_COW))) {
@@ -79,14 +87,22 @@ duppage(envid_t envid, unsigned pn)
 	uint32_t pde = vpd[PDX(addr)];
 	if((pde & PTE_P) && (pde & PTE_U)) {
 		uint32_t pte = vpt[pn];
-		if((pte & PTE_P) && (pte & PTE_U) && (pte & (PTE_W|PTE_COW))) {
-			r = sys_page_map(parent, (void *)addr, envid, (void *)addr, PTE_COW|PTE_U|PTE_P);
-			if(r < 0) {
-				return r;
+		if((pte & PTE_P) && (pte & PTE_U)) {
+			if(pte & (PTE_W|PTE_COW)) {
+				r = sys_page_map(parent, (void *)addr, envid, (void *)addr, PTE_COW|PTE_U|PTE_P);
+				if(r < 0) {
+					return r;
+				}
+				r = sys_page_map(parent, (void *)addr, parent, (void *)addr, PTE_COW|PTE_U|PTE_P);
+				if(r < 0) {
+					return r;
+				}
 			}
-			r = sys_page_map(parent, (void *)addr, parent, (void *)addr, PTE_COW|PTE_U|PTE_P);
-			if(r < 0) {
-				return r;
+			else {
+				r = sys_page_map(parent, (void *)addr, envid, (void *)addr, PTE_U|PTE_P);
+				if(r < 0) {
+					return r;
+				}
 			}
 		}
 	}
@@ -142,10 +158,8 @@ fork(void)
 		if(r < 0) {
 			return r;
 		}
-cprintf("create child %x\n", envid);
 	}
 	else {    // child. if can reach here, sys_env_set_status must be called by parent and virtual memory is prepared
-cprintf("child %x start\n", sys_getenvid());
 		thisenv = (struct Env *)envs + ENVX(sys_getenvid());
 	}
 	return envid;
