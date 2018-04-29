@@ -5,7 +5,8 @@
 
 extern void umain(int argc, char **argv);
 
-const volatile struct Env *thisenv;
+//const volatile struct Env *thisenv;
+__attribute__((__aligned__(PGSIZE))) struct Env_with_padding this_env_with_padding;
 const char *binaryname = "<unknown>";
 
 void

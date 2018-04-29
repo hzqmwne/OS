@@ -23,9 +23,16 @@
 // main user program
 void	umain(int argc, char **argv);
 
+struct Env_with_padding {
+	const volatile struct Env *env;
+	char padding[PGSIZE-sizeof(struct Env *)];
+};
+
 // libmain.c or entry.S
 extern const char *binaryname;
-extern const volatile struct Env *thisenv;
+//extern const volatile struct Env *thisenv;
+extern struct Env_with_padding this_env_with_padding;
+#define thisenv (this_env_with_padding.env)
 extern const volatile struct Env envs[NENV];
 extern const volatile struct Page pages[];
 
