@@ -81,16 +81,11 @@ i386_init(void)
 
 	// Acquire the big kernel lock before waking up APs
 	// Your code here:
+	spin_initlock(&kernel_lock);
 	lock_kernel();
- 
+
 	// Starting non-boot CPUs
 	boot_aps();
-
-#ifdef USE_TICKET_SPIN_LOCK
-	unlock_kernel();
-	spinlock_test();
-	lock_kernel();
-#endif
 
 	// Should always have idle processes at first.
 	int i;
@@ -104,6 +99,12 @@ i386_init(void)
 	// Touch all you want.
 	ENV_CREATE(user_primes, ENV_TYPE_USER);
 #endif // TEST*
+
+#ifdef USE_TICKET_SPIN_LOCK
+	unlock_kernel();
+	spinlock_test();
+	lock_kernel();
+#endif
 
 	// Schedule and run the first user environment!
 	sched_yield();
