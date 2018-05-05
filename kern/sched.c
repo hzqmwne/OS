@@ -29,6 +29,27 @@ sched_yield(void)
 	// below to switch to this CPU's idle environment.
 
 	// LAB 4: Your code here.
+	struct Env *cur = curenv;    // When env destroyed, curenv is 0. See env.c, env_destroy
+	if(cur == NULL) {
+		cur = &envs[cpunum()];
+	}
+	for(i = 0; i < NENV; ++i) {
+		cur += 1;
+		if(cur >= &envs[NENV]) {
+			cur -= NENV;
+		}
+		if((cur-envs) < NCPU) {
+			continue;
+		}
+		if(cur->env_status == ENV_RUNNABLE) {
+			env_run(cur);
+			return;
+		}
+	}
+	if(cur->env_status == ENV_RUNNING) {    // if curenv != NULL, must be cur == curenv
+		env_run(cur);
+		return;
+	}
 
 	// For debugging and testing purposes, if there are no
 	// runnable environments other than the idle environments,

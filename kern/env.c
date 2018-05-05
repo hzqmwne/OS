@@ -119,6 +119,14 @@ env_init(void)
 {
 	// Set up envs array
 	// LAB 3: Your code here.
+	int i;
+	for(i = 0; i < NENV; ++i) {
+		envs[i].env_status = ENV_FREE;
+		envs[i].env_id = 0;
+		envs[i].env_link = envs+i+1;
+	}
+	envs[NENV-1].env_link = NULL;
+	env_free_list = envs;
 
 	// Per-CPU part of the initialization
 	env_init_percpu();
@@ -182,6 +190,9 @@ env_setup_vm(struct Env *e)
 	//    - The functions in kern/pmap.h are handy.
 
 	// LAB 3: Your code here.
+	++p->pp_ref;
+	e->env_pgdir = page2kva(p);
+	memmove(e->env_pgdir, kern_pgdir, PGSIZE);
 
 	// UVPT maps the env's own page table read-only.
 	// Permissions: kernel R, user R
@@ -247,6 +258,7 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 
 	// Enable interrupts while in user mode.
 	// LAB 4: Your code here.
+	e->env_tf.tf_eflags |= FL_IF;
 
 	// Clear the page fault handler until user installs one.
 	e->env_pgfault_upcall = 0;
@@ -279,6 +291,32 @@ region_alloc(struct Env *e, void *va, size_t len)
 	//   'va' and 'len' values that are not page-aligned.
 	//   You should round va down, and round (va + len) up.
 	//   (Watch out for corner-cases!)
+	char *va_down = ROUNDDOWN(va, PGSIZE);
+	size_t len_up = ROUNDUP(len, PGSIZE);    // assert 'int' is not overflow !
+	assert(va_down + len_up >= va_down);
+	size_t i;
+	for(i = 0; i < len; i += PGSIZE) {
+		struct Page *p = page_alloc(0);
+		assert(p != NULL);
+		page_insert(e->env_pgdir, p, va_down+i, PTE_W|PTE_U|PTE_P);
+	}
+}
+
+static void
+region_alloc_pdes(pde_t **pdes, void *va, size_t len, int perm) {
+	char *va_down = ROUNDDOWN(va, PGSIZE);
+	size_t len_up = ROUNDUP(len, PGSIZE);    // assert 'int' is not overflow !
+	assert(va_down + len_up >= va_down);
+	size_t i;
+	for(i = 0; i < len; i += PGSIZE) {
+		struct Page *p = page_alloc(0);
+		assert(p != NULL);
+		pde_t **pdes_now = pdes;
+		while(*pdes_now != NULL) {
+			page_insert(*pdes_now, p, va_down+i, perm|PTE_P);
+			++pdes_now;
+		}
+	}
 }
 
 //
@@ -336,10 +374,41 @@ load_icode(struct Env *e, uint8_t *binary, size_t size)
 
 	// LAB 3: Your code here.
 
+	uint32_t old_cr3 = rcr3();
+	lcr3(PADDR(e->env_pgdir));
+
+	pde_t *pdes[2] = { e->env_pgdir, NULL };
+	struct Elf *elfhdr = (struct Elf *)binary;
+	struct Proghdr *ph, *eph;
+	if (elfhdr->e_magic != ELF_MAGIC) {
+		panic("load_icode: not a valid ELF");
+	}
+	ph = (struct Proghdr *) ((uint8_t *) elfhdr + elfhdr->e_phoff);
+	eph = ph + elfhdr->e_phnum;
+	e->brk = 0;
+	for (; ph < eph; ph++) {
+		if(ph->p_type == ELF_PROG_LOAD) {
+			int perm = PTE_W|PTE_U|PTE_P;
+			if(ph->p_flags & ELF_PROG_FLAG_WRITE) {
+				perm |= PTE_W;
+			}
+			region_alloc_pdes(pdes, (void *)ph->p_va, ph->p_memsz, perm);
+			assert(ph->p_filesz <= ph->p_memsz);
+			memmove((void *)ph->p_va, binary + ph->p_offset, ph->p_filesz);
+			memset((void *)ph->p_va + ph->p_filesz, 0, ph->p_memsz - ph->p_filesz);
+			e->brk = MAX(e->brk, ph->p_va + ph->p_memsz);
+		}
+	}
+	e->brk = ROUNDUP(e->brk, PGSIZE);
+	e->env_tf.tf_eip = elfhdr->e_entry;
+
 	// Now map one page for the program's initial stack
 	// at virtual address USTACKTOP - PGSIZE.
 
 	// LAB 3: Your code here.
+	region_alloc_pdes(pdes, (void *)(USTACKTOP - PGSIZE), PGSIZE, PTE_W|PTE_U|PTE_P);
+
+	lcr3(old_cr3);
 }
 
 //
@@ -353,9 +422,14 @@ void
 env_create(uint8_t *binary, size_t size, enum EnvType type)
 {
 	// LAB 3: Your code here.
+	struct Env *e;
+	env_alloc(&e, 0);
+	e->env_type = type;
+	load_icode(e, binary, size);
  
 	// If this is the file server (type == ENV_TYPE_FS) give it I/O privileges.
 	// LAB 5: Your code here.
+
 }
 
 //
@@ -485,7 +559,17 @@ env_run(struct Env *e)
 	//	e->env_tf to sensible values.
 
 	// LAB 3: Your code here.
+	if(curenv != NULL && curenv->env_status == ENV_RUNNING) {
+		curenv->env_status = ENV_RUNNABLE;
+	}    //??
+	curenv = e;
+	e->env_cpunum = cpunum();
+	e->env_status = ENV_RUNNING;
+	++e->env_runs;
+	lcr3(PADDR(e->env_pgdir));
+	unlock_kernel();
+	env_pop_tf(&e->env_tf);
 
-	panic("env_run not yet implemented");
+	//panic("env_run not yet implemented");
 }
 
