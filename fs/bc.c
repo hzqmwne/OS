@@ -49,7 +49,23 @@ bc_pgfault(struct UTrapframe *utf)
 	// the page dirty).
 	//
 	// LAB 5: Your code here
-	panic("bc_pgfault not implemented");
+	envid_t thisid = thisenv->env_id;
+	r = sys_page_alloc(thisid, (void *)PTE_ADDR(addr), PTE_W|PTE_U|PTE_P);
+	if(r < 0) {
+		cprintf("%e\n", r);
+		panic("bc_pgfault sys_page_alloc error");
+	}
+	r = ide_read(blockno*BLKSECTS, (void *)PTE_ADDR(addr), BLKSECTS);
+	if(r < 0) {
+		cprintf("%e\n", r);
+		panic("bc_pgfault ide_read error");
+	}
+	r = sys_page_map(thisid, (void *)PTE_ADDR(addr), thisid, (void *)PTE_ADDR(addr), PTE_W|PTE_U|PTE_P);
+	if(r < 0) {
+		cprintf("%e\n", r);
+		panic("bc_pgfault sys_page_map error");
+	}
+	//panic("bc_pgfault not implemented");
 
 	// Check that the block we read was allocated. (exercise for
 	// the reader: why do we do this *after* reading the block
@@ -74,7 +90,12 @@ flush_block(void *addr)
 		panic("flush_block of bad va %08x", addr);
 
 	// LAB 5: Your code here.
-	panic("flush_block not implemented");
+	envid_t thisid = thisenv->env_id;
+	if(va_is_mapped(addr) && va_is_dirty(addr)) {
+		ide_write(blockno*BLKSECTS, (void *)PTE_ADDR(addr), BLKSECTS);
+		sys_page_map(thisid, (void *)PTE_ADDR(addr), thisid, (void *)PTE_ADDR(addr), PTE_W|PTE_U|PTE_P);
+	}
+	//panic("flush_block not implemented");
 }
 
 // Test that the block cache works, by smashing the superblock and

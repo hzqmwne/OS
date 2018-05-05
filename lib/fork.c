@@ -27,7 +27,8 @@ pgfault(struct UTrapframe *utf)
 	//   (see <inc/memlayout.h>).
 
 	// LAB 4: Your code here.
-	if((uint32_t)addr >= USTACKTOP-USER_STACK_SIZE && (uint32_t)addr < USTACKTOP && !(vpt[PGNUM(addr)] & PTE_P)) {
+	pte_t pte = vpt[PGNUM(addr)];
+	if((uint32_t)addr >= USTACKTOP-USER_STACK_SIZE && (uint32_t)addr < USTACKTOP && !(pte & PTE_P)) {
 		// user stack is not present
 		envid_t thisid = sys_getenvid();
 		r = sys_page_alloc(thisid, (void *)PTE_ADDR(addr), PTE_W|PTE_U|PTE_P);
@@ -37,7 +38,7 @@ pgfault(struct UTrapframe *utf)
 		}
 		return;
 	}
-	if(!((err & FEC_WR) && (vpt[PGNUM(addr)] & PTE_COW))) {
+	if(!((err & FEC_WR) && (pte & PTE_COW))) {
 		panic("pgfault check error");
 	}
 
@@ -50,17 +51,27 @@ pgfault(struct UTrapframe *utf)
 
 	// LAB 4: Your code here.
 	envid_t thisid = sys_getenvid();    // can't use thisenv->env_id now! After this, child's stack is fine, and then thisenv->env_id can be changed. see lib/fork.c, fork()
-	r = sys_page_alloc(thisid, (void *)PFTEMP, PTE_W|PTE_U|PTE_P);
-	if(r < 0) {
-		cprintf("%e\n", r);
-		panic("pgfault sys_page_alloc error");
+	if(pages[PGNUM(PTE_ADDR(pte))].pp_ref == 1) {    // the only map for this page, no need to copy
+		r = sys_page_map(thisid, (void *)PTE_ADDR(addr), thisid, (void *)PTE_ADDR(addr), PTE_W|PTE_U|PTE_P);
+		if(r < 0) {
+			cprintf("%e\n", r);
+			panic("pgfault sys_page_map2 error");
+		}
 	}
-	memmove((void *)PFTEMP, (void *)PTE_ADDR(addr), PGSIZE);
-	r = sys_page_map(thisid, (void *)PFTEMP, thisid, (void *)PTE_ADDR(addr), PTE_W|PTE_U|PTE_P);
-	if(r < 0) {
-		cprintf("%e\n", r);
-		panic("pgfault sys_page_map error");
+	else {
+		r = sys_page_alloc(thisid, (void *)PFTEMP, PTE_W|PTE_U|PTE_P);
+		if(r < 0) {
+			cprintf("%e\n", r);
+			panic("pgfault sys_page_alloc error");
+		}
+		memmove((void *)PFTEMP, (void *)PTE_ADDR(addr), PGSIZE);
+		r = sys_page_map(thisid, (void *)PFTEMP, thisid, (void *)PTE_ADDR(addr), PTE_W|PTE_U|PTE_P);
+		if(r < 0) {
+			cprintf("%e\n", r);
+			panic("pgfault sys_page_map error");
+		}
 	}
+
 
 	//panic("pgfault not implemented");
 }
