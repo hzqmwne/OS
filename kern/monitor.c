@@ -12,6 +12,9 @@
 #include <kern/kdebug.h>
 #include <kern/trap.h>
 
+#include <kern/pmap.h>
+#include <kern/env.h>
+
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
 
@@ -25,6 +28,13 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
+	{ "backtrace", "Display backtrace", mon_backtrace },
+	{ "time", "Display the running time (in clocks cycles) of the command", mon_time },
+	{ "exit", "quit", mon_quit },
+	{ "quit", "quit", mon_quit },
+	{ "c", "continue", mon_continue },
+	{ "si", "step instruction", mon_stepi },
+	{ "x", "examine", mon_examine },
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
@@ -70,7 +80,22 @@ int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
 	// Your code here.
-    cprintf("Backtrace success\n");
+	//cprintf("Backtrace success\n");
+	unsigned *ebp, eip;
+	int i;
+	struct Eipdebuginfo info;
+
+	cprintf("Stack backtrace:\n");
+	ebp = (unsigned *)read_ebp();
+	while(ebp) {    // see entry.S, line 73
+		eip = ebp[1];
+
+		cprintf("  eip %08x  ebp %08x  args %08x %08x %08x %08x %08x\n", eip, ebp, ebp[2], ebp[3], ebp[4], ebp[5], ebp[6]);
+		debuginfo_eip(eip, &info);
+		cprintf("         %s:%d %.*s+%d\n", info.eip_file, info.eip_line, info.eip_fn_namelen, info.eip_fn_name, eip - info.eip_fn_addr);
+
+		ebp = (unsigned *)ebp[0];
+	}
 	return 0;
 }
 
@@ -81,12 +106,24 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 #define WHITESPACE "\t\r\n "
 #define MAXARGS 16
 
+static int invokecmd(int argc, char *argv[MAXARGS], struct Trapframe *tf) {
+	// Lookup and invoke the command
+	int i;
+	if (argc == 0)
+		return 0;
+	for (i = 0; i < NCOMMANDS; i++) {
+		if (strcmp(argv[0], commands[i].name) == 0)
+			return commands[i].func(argc, argv, tf);
+	}
+	cprintf("Unknown command '%s'\n", argv[0]);
+	return 0;
+}
+
 static int
 runcmd(char *buf, struct Trapframe *tf)
 {
 	int argc;
 	char *argv[MAXARGS];
-	int i;
 
 	// Parse the command buffer into whitespace-separated arguments
 	argc = 0;
@@ -109,15 +146,7 @@ runcmd(char *buf, struct Trapframe *tf)
 	}
 	argv[argc] = 0;
 
-	// Lookup and invoke the command
-	if (argc == 0)
-		return 0;
-	for (i = 0; i < NCOMMANDS; i++) {
-		if (strcmp(argv[0], commands[i].name) == 0)
-			return commands[i].func(argc, argv, tf);
-	}
-	cprintf("Unknown command '%s'\n", argv[0]);
-	return 0;
+	return invokecmd(argc, argv, tf);
 }
 
 void
@@ -149,3 +178,50 @@ read_eip()
 	__asm __volatile("movl 4(%%ebp), %0" : "=r" (callerpc));
 	return callerpc;
 }
+
+
+
+int mon_quit(int argc, char **argv, struct Trapframe *tf) {
+	return -1;
+}
+
+int
+mon_time(int argc, char **argv, struct Trapframe *tf) {
+	long long start, end;
+	start = read_tsc();
+	invokecmd(argc - 1, argv + 1, tf);
+	end = read_tsc();
+	cprintf("%s cycles: %d\n", argv[1], end - start);
+	return 0;
+}
+
+int mon_continue(int argc, char **argv, struct Trapframe *tf) {
+	if(tf != NULL) {
+		tf->tf_eflags &= ~FL_TF;
+		return -1;
+	}
+	return 0;
+}
+
+int mon_stepi(int argc, char **argv, struct Trapframe *tf) {
+	if(tf != NULL) {
+		user_mem_assert(curenv, (void *)tf->tf_eip, 1, PTE_U|PTE_P);
+		cprintf("tf_eip=%08x\n", tf->tf_eip);
+		struct Eipdebuginfo info;
+		debuginfo_eip(tf->tf_eip, &info);
+		cprintf("%s:%d: %.*s+%d\n", info.eip_file, info.eip_line, info.eip_fn_namelen, info.eip_fn_name, tf->tf_eip - info.eip_fn_addr);    // see syscall.c, line 27
+		tf->tf_eflags |= FL_TF;
+		return -1;
+	}
+	return 0;
+}
+
+int mon_examine(int argc, char **argv, struct Trapframe *tf) {
+	long value = strtol(argv[1], NULL, 0);
+	if(tf != NULL) {
+		user_mem_assert(curenv, (void *)value, 4, PTE_U|PTE_P);
+	}
+	cprintf("%ld\n", *(int *)value);
+	return 0;
+}
+
