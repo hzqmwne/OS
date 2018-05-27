@@ -15,6 +15,8 @@
 
 #include <kern/spinlock.h>
 
+#include <kern/e1000.h>
+
 // Print a string to the system console.
 // The string is exactly 'len' characters long.
 // Destroys the environment on memory errors.
@@ -475,9 +477,19 @@ static int
 sys_time_msec(void)
 {
 	// LAB 6: Your code here.
-	panic("sys_time_msec not implemented");
+	return time_msec();
+	//panic("sys_time_msec not implemented");
 }
 
+static int sys_network_transmit_packet(char *buf, unsigned len) {
+	user_mem_assert(curenv, buf, len, PTE_U|PTE_P);
+	return transmit_packet(buf, len);
+}
+
+static int sys_network_receive_packet(char *buf) {
+	user_mem_assert(curenv, buf, ETHERNET_PACKET_MAX_SIZE, PTE_U|PTE_W|PTE_P);
+	return receive_packet(buf);
+}
 
 // Dispatches to the correct kernel function, passing the arguments.
 int32_t
@@ -558,7 +570,19 @@ syscall_dispatch(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint
 			return sys_sbrk(a1);
 			break;
 		}
-		case NSYSCALLS: {    // 16
+		case SYS_time_msec: {    // 18
+			return sys_time_msec();
+			break;
+		}
+		case SYS_network_transmit_packet: {
+			return sys_network_transmit_packet((char *)a1, a2);
+			break;
+		}
+		case SYS_network_receive_packet: {
+			return sys_network_receive_packet((char *)a1);
+			break;
+		}
+		case NSYSCALLS: {    // 17
 			panic("not a syscall");
 			return -E_INVAL;
 			break;

@@ -292,10 +292,10 @@ region_alloc(struct Env *e, void *va, size_t len)
 	//   You should round va down, and round (va + len) up.
 	//   (Watch out for corner-cases!)
 	char *va_down = ROUNDDOWN(va, PGSIZE);
-	size_t len_up = ROUNDUP(len, PGSIZE);    // assert 'int' is not overflow !
+	size_t len_up = ROUNDUP(len+PGOFF(va), PGSIZE);    // assert 'int' is not overflow !
 	assert(va_down + len_up >= va_down);
 	size_t i;
-	for(i = 0; i < len; i += PGSIZE) {
+	for(i = 0; i < len_up; i += PGSIZE) {
 		struct Page *p = page_alloc(0);
 		assert(p != NULL);
 		page_insert(e->env_pgdir, p, va_down+i, PTE_W|PTE_U|PTE_P);
@@ -305,10 +305,10 @@ region_alloc(struct Env *e, void *va, size_t len)
 static void
 region_alloc_pdes(pde_t **pdes, void *va, size_t len, int perm) {
 	char *va_down = ROUNDDOWN(va, PGSIZE);
-	size_t len_up = ROUNDUP(len, PGSIZE);    // assert 'int' is not overflow !
+	size_t len_up = ROUNDUP(len+PGOFF(va), PGSIZE);    // assert 'int' is not overflow !
 	assert(va_down + len_up >= va_down);
 	size_t i;
-	for(i = 0; i < len; i += PGSIZE) {
+	for(i = 0; i < len_up; i += PGSIZE) {
 		struct Page *p = page_alloc(0);
 		assert(p != NULL);
 		pde_t **pdes_now = pdes;

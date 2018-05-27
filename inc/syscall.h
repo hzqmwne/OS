@@ -23,6 +23,10 @@ enum {
 
 	SYS_sbrk,
 	SYS_time_msec,
+
+	SYS_network_transmit_packet,
+	SYS_network_receive_packet,
+
 	NSYSCALLS
 };
 
