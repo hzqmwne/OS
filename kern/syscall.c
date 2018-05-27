@@ -491,6 +491,14 @@ static int sys_network_receive_packet(char *buf) {
 	return receive_packet(buf);
 }
 
+static uint32_t sys_network_get_mac_address_low() {
+	return get_mac_address_low();
+}
+
+static uint16_t sys_network_get_mac_address_high() {
+	return get_mac_address_high();
+}
+
 // Dispatches to the correct kernel function, passing the arguments.
 int32_t
 syscall_dispatch(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
@@ -580,6 +588,14 @@ syscall_dispatch(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint
 		}
 		case SYS_network_receive_packet: {
 			return sys_network_receive_packet((char *)a1);
+			break;
+		}
+		case SYS_network_get_mac_address_low: {
+			return (int)sys_network_get_mac_address_low();
+			break;
+		}
+		case SYS_network_get_mac_address_high: {
+			return (int)(uint32_t)sys_network_get_mac_address_high();
 			break;
 		}
 		case NSYSCALLS: {    // 17

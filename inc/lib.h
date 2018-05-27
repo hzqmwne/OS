@@ -66,6 +66,8 @@ unsigned int sys_time_msec(void);
 
 int sys_network_transmit_packet(char *buf, unsigned len);
 int sys_network_receive_packet(char *buf);
+uint32_t sys_network_get_mac_address_low();
+uint16_t sys_network_get_mac_address_high();
 
 // This must be inlined.  Exercise for reader: why?
 static __inline envid_t __attribute__((always_inline))

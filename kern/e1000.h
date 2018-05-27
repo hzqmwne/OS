@@ -14,4 +14,8 @@ int pci_82540em_vendor(struct pci_func *pcif);
 int transmit_packet(char *buf, unsigned len);
 int receive_packet(char *buf);
 
+
+uint32_t get_mac_address_low();
+uint16_t get_mac_address_high();
+
 #endif	// JOS_KERN_E1000_H

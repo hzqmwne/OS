@@ -204,3 +204,13 @@ int sys_network_transmit_packet(char *buf, unsigned len) {
 int sys_network_receive_packet(char *buf) {
 	return syscall(SYS_network_receive_packet, 0, (uint32_t)buf, 0, 0, 0, 0);
 }
+
+
+uint32_t sys_network_get_mac_address_low() {
+	return (uint32_t)syscall(SYS_network_get_mac_address_low, 0, 0, 0, 0, 0, 0);
+}
+
+uint16_t sys_network_get_mac_address_high() {
+	return (uint16_t)(uint32_t)syscall(SYS_network_get_mac_address_high, 0, 0, 0, 0, 0, 0);
+}
+

@@ -27,6 +27,9 @@ enum {
 	SYS_network_transmit_packet,
 	SYS_network_receive_packet,
 
+	SYS_network_get_mac_address_low,
+	SYS_network_get_mac_address_high,
+
 	NSYSCALLS
 };
 

@@ -6,6 +6,8 @@
 #include <inc/string.h>
 #include <kern/pmap.h>
 
+#define EERD_OFFSET 0x14
+
 #define TDBAL_OFFSET 0x3800
 #define TDBAH_OFFSET 0x3804
 #define TDLEN_OFFSET 0x3808
@@ -36,6 +38,15 @@
 
 #define RDESC_STATUS_DD 0x1
 #define RDESC_STATUS_EOP 0x2
+
+struct EERD {
+	unsigned start : 1;
+	unsigned  : 3;
+	unsigned done : 1;
+	unsigned  : 3;
+	unsigned addr : 8;
+	unsigned data : 16;
+};
 
 struct tx_desc
 {
@@ -114,6 +125,9 @@ struct RAH {
 
 volatile uint32_t *e1000_mmio;
 
+static uint32_t mac_address_low = 0;
+static uint32_t mac_address_high = 0;
+
 __attribute__((__aligned__(16)))
 static struct tx_desc transmit_descriptor_buffer[TRANSMIT_BUFFER_LEN];
 static char transmit_data_buffer[TRANSMIT_BUFFER_LEN][ETHERNET_PACKET_MAX_SIZE];
@@ -121,6 +135,24 @@ static char transmit_data_buffer[TRANSMIT_BUFFER_LEN][ETHERNET_PACKET_MAX_SIZE];
 __attribute__((__aligned__(16)))
 static struct rx_desc receive_descriptor_buffer[RECEIVE_BUFFER_LEN];
 static char receive_data_buffer[RECEIVE_BUFFER_LEN][2048];
+
+
+static uint16_t read_eeprom(uint8_t addr) {
+	struct EERD eerd = { .start=1, .addr=addr, };
+	e1000_mmio[EERD_OFFSET >> 2] = *(uint32_t *)&eerd;
+	do {
+		eerd = *(struct EERD *)&e1000_mmio[EERD_OFFSET >> 2];
+	} while(!eerd.done);
+	return eerd.data;
+}
+
+static void set_mac_address() {
+	uint32_t word0 = read_eeprom(0);
+	uint32_t word1 = read_eeprom(1);
+	uint32_t word2 = read_eeprom(2);
+	mac_address_low = (word1 << 16) | word0;
+	mac_address_high = word2;
+}
 
 static void e1000_mem_init(struct pci_func *pcif) {
 	uint32_t mmio_base = pcif->reg_base[0];
@@ -154,8 +186,8 @@ static void e1000_receive_init() {
 		receive_descriptor_buffer[i].addr = PADDR(&receive_data_buffer[i]);
 	}
 
-	e1000_mmio[RAL_OFFSET >> 2] = 0x12005452;
-	struct RAH rah = { .RAH=0x5634, .AS=0, .AV=1, };
+	e1000_mmio[RAL_OFFSET >> 2] = mac_address_low;
+	struct RAH rah = { .RAH=mac_address_high, .AS=0, .AV=1, };
 	e1000_mmio[RAH_OFFSET >> 2] = *(uint32_t *)&rah;
 
 	volatile uint32_t *mta = &e1000_mmio[MTA_OFFSET >> 2];
@@ -184,6 +216,7 @@ static void e1000_receive_init() {
 int pci_82540em_vendor(struct pci_func *pcif) {
 	pci_func_enable(pcif);
 	e1000_mem_init(pcif);
+	set_mac_address();
 	e1000_transmit_init();
 	e1000_receive_init();
 	return 0;
@@ -219,4 +252,12 @@ int receive_packet(char *buf) {
 	desc->status = 0;
 	e1000_mmio[RDT_OFFSET >> 2] = rdt;
 	return len;
+}
+
+uint32_t get_mac_address_low() {
+	return mac_address_low;
+}
+
+uint16_t get_mac_address_high() {
+	return mac_address_high;
 }
