@@ -25,6 +25,8 @@ input(envid_t ns_envid)
 			r = sys_page_alloc(thisenv->env_id, &nsipcbuf, PTE_U|PTE_W|PTE_P);
 			assert(r == 0);
 		}
-		sys_yield();
+		else {
+			sys_yield();
+		}
 	}
 }
